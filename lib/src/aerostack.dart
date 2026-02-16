@@ -19,7 +19,18 @@ class Aerostack {
         'X-Aerostack-Key': apiKey,
       },
     ),
-  );
+  ) {
+    _dio.interceptors.add(InterceptorsWrapper(
+      onError: (DioException e, handler) {
+        // Prevent crash when error data is a Map but user code expects a String
+        if (e.response?.data is Map) {
+           final errorData = e.response?.data as Map<String, dynamic>;
+           print('Aerostack API Error: ${errorData['error']?['message'] ?? e.message}');
+        }
+        return handler.next(e);
+      },
+    ));
+  }
 
   late final RealtimeService _realtime = RealtimeService(
     baseUrl: _dio.options.baseUrl,
