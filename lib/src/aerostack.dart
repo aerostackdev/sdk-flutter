@@ -6,6 +6,7 @@ import 'services/ai_service.dart';
 import 'services/cache_service.dart';
 import 'services/storage_service.dart';
 import 'services/queue_service.dart';
+import 'services/realtime_service.dart';
 
 class Aerostack {
   final Dio _dio;
@@ -13,8 +14,16 @@ class Aerostack {
   Aerostack({required String baseUrl, required String apiKey}) : _dio = Dio(
     BaseOptions(
       baseUrl: baseUrl,
-      headers: {'X-Aerostack-Key': apiKey},
+      headers: {
+        'X-API-Key': apiKey,
+        'X-Aerostack-Key': apiKey,
+      },
     ),
+  );
+
+  late final RealtimeService _realtime = RealtimeService(
+    baseUrl: _dio.options.baseUrl,
+    apiKey: _dio.options.headers['X-API-Key'] as String,
   );
 
   AuthService get auth => AuthService(_dio);
@@ -28,4 +37,15 @@ class Aerostack {
   StorageService get storage => StorageService(_dio);
 
   QueueService get queue => QueueService(_dio);
+
+  RealtimeService get realtime => _realtime;
+
+  Future<dynamic> call(String slug, dynamic data, {String method = 'POST'}) async {
+    final response = await _dio.request(
+      '/custom/$slug',
+      data: data,
+      options: Options(method: method),
+    );
+    return response.data;
+  }
 }
