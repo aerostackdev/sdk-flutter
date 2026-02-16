@@ -26,7 +26,7 @@ import 'package:aerostack_sdk/aerostack_sdk.dart';
 
 void main() async {
   final aerostack = Aerostack(
-    projectUrl: 'https://your-project.aerostack.app',
+    projectUrl: 'https://your-project.aerostack.dev',
     apiKey: 'your-public-api-key',
   );
   
@@ -61,7 +61,7 @@ for (var todo in todos) {
 
 ```dart
 // Chat with AI Agent
-final response = await aerostack.ai.chat(
+final response = await aerostack.dev.chat(
   agentId: 'support-bot',
   message: 'How do I reset my password?',
 );
@@ -71,4 +71,4 @@ print(response.reply);
 
 ## Documentation
 
-For full documentation, visit [docs.aerostack.ai](https://docs.aerostack.ai/sdk/flutter).
+For full documentation, visit [docs.aerostack.dev](https://docs.aerostack.dev/sdk/flutter).
