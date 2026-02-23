@@ -1,16 +1,18 @@
 import 'package:dio/dio.dart';
 
 class QueueService {
-  final Dio _dio;
+  final Dio dio;
+  QueueService(this.dio);
 
-  QueueService(this._dio);
-
-  Future<Map<String, dynamic>> enqueue(String type, Map<String, dynamic> data, [int? delay]) async {
-    final response = await _dio.post('/queue/enqueue', data: {
-      'type': type,
-      'data': data,
-      'delay': delay,
-    });
+  Future<Map<String, dynamic>> enqueueJob(String type, Map<String, dynamic> data, {int? delay}) async {
+    final Response response = await dio.post(
+      '/queue/enqueue',
+      data: {
+        'type': type,
+        'data': data,
+        if (delay != null) 'delay': delay
+      },
+    );
     return response.data;
   }
 }

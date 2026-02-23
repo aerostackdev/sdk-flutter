@@ -2,25 +2,27 @@ import 'package:dio/dio.dart';
 import '../models/auth_models.dart';
 
 class AuthService {
-  final Dio _dio;
+  final Dio dio;
+  AuthService(this.dio);
 
-  AuthService(this._dio);
-
-  Future<AuthResponse> authSignin(String email, String password) async {
-    final response = await _dio.post('/auth/signin', data: {
-      'email': email,
-      'password': password,
-    });
+  Future<AuthResponse> signUp(String email, String password, {String? name, Map<String, dynamic>? metadata}) async {
+    final Response response = await dio.post(
+      '/auth/signup',
+      data: {
+        'email': email,
+        'password': password,
+        if (name != null) 'name': name,
+        if (metadata != null) 'metadata': metadata
+      },
+    );
     return AuthResponse.fromJson(response.data);
   }
 
-  Future<AuthResponse> authSignup(String email, String password, [String? name, Map<String, dynamic>? metadata]) async {
-    final response = await _dio.post('/auth/signup', data: {
-      'email': email,
-      'password': password,
-      'name': name,
-      'metadata': metadata,
-    });
+  Future<AuthResponse> signIn(String email, String password) async {
+    final Response response = await dio.post(
+      '/auth/signin',
+      data: {'email': email, 'password': password},
+    );
     return AuthResponse.fromJson(response.data);
   }
 }

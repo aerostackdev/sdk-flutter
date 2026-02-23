@@ -6,7 +6,7 @@ part 'auth_models.g.dart';
 class AuthResponse {
   final String token;
   final User user;
-  final String expiresAt;
+  final DateTime expiresAt;
 
   AuthResponse({required this.token, required this.user, required this.expiresAt});
 
@@ -20,10 +20,10 @@ class User {
   final String id;
   final String email;
   final String? name;
-  final String createdAt;
-  final Map<String, dynamic> metadata;
+  final DateTime createdAt;
+  final Map<String, dynamic>? metadata;
 
-  User({required this.id, required this.email, this.name, required this.createdAt, required this.metadata});
+  User({required this.id, required this.email, this.name, required this.createdAt, this.metadata});
 
   factory User.fromJson(Map<String, dynamic> json) => _$UserFromJson(json);
 

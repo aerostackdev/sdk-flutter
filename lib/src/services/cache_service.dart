@@ -1,21 +1,26 @@
 import 'package:dio/dio.dart';
 
 class CacheService {
-  final Dio _dio;
+  final Dio dio;
+  CacheService(this.dio);
 
-  CacheService(this._dio);
-
-  Future<Map<String, dynamic>> cacheGet(String key) async {
-    final response = await _dio.post('/cache/get', data: {'key': key});
+  Future<Map<String, dynamic>> getValue(String key) async {
+    final Response response = await dio.post(
+      '/cache/get',
+      data: {'key': key},
+    );
     return response.data;
   }
 
-  Future<bool> cacheSet(String key, dynamic value, [int? ttl]) async {
-    final response = await _dio.post('/cache/set', data: {
-      'key': key,
-      'value': value,
-      'ttl': ttl,
-    });
-    return response.data['success'] ?? false;
+  Future<bool> setValue(String key, dynamic value, {int? ttl}) async {
+    final Response response = await dio.post(
+      '/cache/set',
+      data: {
+        'key': key,
+        'value': value,
+        if (ttl != null) 'ttl': ttl
+      },
+    );
+    return response.data['success'] as bool;
   }
 }
