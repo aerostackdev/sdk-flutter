@@ -350,7 +350,7 @@
       "languageVersion": "3.4"
     },
     {
-      "name": "aerostack_flutter",
+      "name": "aerostack_sdk",
       "rootUri": "../",
       "packageUri": "lib/",
       "languageVersion": "2.17"

@@ -11,7 +11,7 @@ DbQueryResult _$DbQueryResultFromJson(Map<String, dynamic> json) =>
       results: (json['results'] as List<dynamic>)
           .map((e) => e as Map<String, dynamic>)
           .toList(),
-      count: json['count'] as int,
+      count: (json['count'] as num).toInt(),
     );
 
 Map<String, dynamic> _$DbQueryResultToJson(DbQueryResult instance) =>
