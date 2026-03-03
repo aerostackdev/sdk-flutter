@@ -7,7 +7,7 @@ enum RealtimeStatus { idle, connecting, connected, reconnecting, disconnected }
 
 class RealtimeSubscription<T> {
   final RealtimeClient _client;
-  final String topic;
+  String topic; // mutable so the subscriptions map can be re-keyed to the server-normalized topic
   final Map<String, dynamic>? filter;
   final StreamController<Map<String, dynamic>> _controller =
       StreamController<Map<String, dynamic>>.broadcast();
@@ -170,6 +170,22 @@ class RealtimeClient {
   void _handleMessage(Map<String, dynamic> data) {
     if (data['type'] == 'pong') {
       _lastPong = DateTime.now();
+      return;
+    }
+    if (data['type'] == 'subscribed') {
+      // Server confirmed subscription with its normalized topic (e.g. 'table/orders/<projectId>').
+      // Re-key our subscription map so incoming db_change messages can be routed correctly.
+      final serverTopic = data['topic'] as String?;
+      if (serverTopic != null) {
+        for (final origTopic in _subscriptions.keys.toList()) {
+          if (serverTopic != origTopic && serverTopic.startsWith(origTopic)) {
+            final sub = _subscriptions.remove(origTopic)!;
+            sub.topic = serverTopic;
+            _subscriptions[serverTopic] = sub;
+            break;
+          }
+        }
+      }
       return;
     }
     final topic = data['topic'];
