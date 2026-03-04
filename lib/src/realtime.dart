@@ -1,9 +1,54 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
+import 'package:dio/dio.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 
 enum RealtimeStatus { idle, connecting, connected, reconnecting, disconnected }
+
+/// Represents a message returned from the realtime history endpoint.
+class HistoryMessage {
+  final String id;
+  final String roomId;
+  final String? userId;
+  final String event;
+  final Map<String, dynamic> data;
+  final DateTime createdAt;
+
+  HistoryMessage({
+    required this.id,
+    required this.roomId,
+    this.userId,
+    required this.event,
+    required this.data,
+    required this.createdAt,
+  });
+
+  factory HistoryMessage.fromJson(Map<String, dynamic> json) {
+    return HistoryMessage(
+      id: json['id'] as String,
+      roomId: json['roomId'] as String,
+      userId: json['userId'] as String?,
+      event: json['event'] as String,
+      data: json['data'] is Map<String, dynamic>
+          ? json['data'] as Map<String, dynamic>
+          : jsonDecode(json['data'] as String) as Map<String, dynamic>,
+      createdAt: DateTime.parse(json['createdAt'] as String),
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'roomId': roomId,
+        'userId': userId,
+        'event': event,
+        'data': data,
+        'createdAt': createdAt.toIso8601String(),
+      };
+
+  @override
+  String toString() => 'HistoryMessage(id: $id, event: $event, roomId: $roomId)';
+}
 
 class RealtimeSubscription<T> {
   final RealtimeClient _client;
@@ -12,6 +57,7 @@ class RealtimeSubscription<T> {
   final StreamController<Map<String, dynamic>> _controller =
       StreamController<Map<String, dynamic>>.broadcast();
   bool _isSubscribed = false;
+  int _publishId = 0;
 
   RealtimeSubscription({
     required RealtimeClient client,
@@ -41,6 +87,51 @@ class RealtimeSubscription<T> {
     _isSubscribed = false;
   }
 
+  /// Publish a custom event to this subscription's topic.
+  ///
+  /// [event] is the custom event name (e.g. 'cursor-move', 'typing').
+  /// [data] is the payload to broadcast.
+  /// [persist] controls whether the message is stored in history (defaults to false).
+  void publish(String event, Map<String, dynamic> data, {bool persist = false}) {
+    _publishId++;
+    _client._send({
+      'type': 'publish',
+      'topic': topic,
+      'event': event,
+      'data': data,
+      'persist': persist,
+      'id': '$topic:$_publishId',
+    });
+  }
+
+  /// Track presence state for the current connection.
+  ///
+  /// [state] is the presence metadata to broadcast (e.g. cursor position, user info).
+  void track(Map<String, dynamic> state) {
+    _client._send({
+      'type': 'track',
+      'topic': topic,
+      'state': state,
+    });
+  }
+
+  /// Stop tracking presence for the current connection.
+  void untrack() {
+    _client._send({
+      'type': 'untrack',
+      'topic': topic,
+    });
+  }
+
+  /// Fetch persisted message history for this subscription's topic.
+  ///
+  /// [limit] controls how many messages to return (max 50 by default).
+  /// [before] is an optional cursor — pass the numeric ID of the earliest message
+  /// you already have to paginate backwards.
+  Future<List<HistoryMessage>> getHistory({int limit = 50, int? before}) async {
+    return _client._getHistory(topic, limit: limit, before: before);
+  }
+
   /// @internal
   void emit(Map<String, dynamic> data) {
     if (!_controller.isClosed) {
@@ -55,6 +146,7 @@ class RealtimeSubscription<T> {
 
 class RealtimeClient {
   late final Uri _wsUri;
+  late final Uri _httpBaseUri;
   final String? apiKey;
   final String? token;
   WebSocketChannel? _channel;
@@ -71,6 +163,7 @@ class RealtimeClient {
   DateTime _lastPong = DateTime.now();
   final int _maxReconnectAttempts;
   final Set<Function()> _maxRetriesListeners = {};
+  late final Dio _dio;
 
   RealtimeClient({
     required String serverUrl,
@@ -84,6 +177,15 @@ class RealtimeClient {
       scheme: isSecure ? 'wss' : 'ws',
       path: '/api/realtime',
     );
+    _httpBaseUri = uri.replace(
+      scheme: isSecure ? 'https' : 'http',
+      path: '',
+    );
+    _dio = Dio(BaseOptions(
+      baseUrl: _httpBaseUri.toString(),
+      connectTimeout: const Duration(milliseconds: 10000),
+      receiveTimeout: const Duration(milliseconds: 10000),
+    ));
   }
 
   RealtimeStatus get status => _status;
@@ -168,11 +270,19 @@ class RealtimeClient {
   }
 
   void _handleMessage(Map<String, dynamic> data) {
-    if (data['type'] == 'pong') {
+    final type = data['type'] as String?;
+
+    if (type == 'pong') {
       _lastPong = DateTime.now();
       return;
     }
-    if (data['type'] == 'subscribed') {
+
+    if (type == 'ack') {
+      // Acknowledgement for a published message — nothing to dispatch.
+      return;
+    }
+
+    if (type == 'subscribed') {
       // Server confirmed subscription with its normalized topic (e.g. 'table/orders/<projectId>').
       // Re-key our subscription map so incoming db_change messages can be routed correctly.
       final serverTopic = data['topic'] as String?;
@@ -188,9 +298,27 @@ class RealtimeClient {
       }
       return;
     }
+
+    // Route 'event' messages (custom publish events) to the matching subscription.
+    if (type == 'event') {
+      final topic = data['topic'] as String?;
+      if (topic != null && _subscriptions.containsKey(topic)) {
+        _subscriptions[topic]!.emit(data);
+      }
+      return;
+    }
+
+    // Route db_change and other topic-based messages.
     final topic = data['topic'];
     if (topic != null && _subscriptions.containsKey(topic)) {
       _subscriptions[topic]!.emit(data);
+    }
+
+    // Additionally, try matching subscriptions by the 'event' field (custom event name)
+    // for cases where the topic is absent but an event name matches a subscription key.
+    final eventField = data['event'] as String?;
+    if (eventField != null && topic == null && _subscriptions.containsKey(eventField)) {
+      _subscriptions[eventField]!.emit(data);
     }
   }
 
@@ -227,6 +355,43 @@ class RealtimeClient {
     } else {
       _sendQueue.add(data);
     }
+  }
+
+  /// @internal — fetch persisted history for a given topic via the REST API.
+  Future<List<HistoryMessage>> _getHistory(
+    String room, {
+    int limit = 50,
+    int? before,
+  }) async {
+    final queryParams = <String, dynamic>{
+      'room': room,
+      'limit': limit,
+    };
+    if (before != null) {
+      queryParams['before'] = before;
+    }
+
+    final headers = <String, String>{};
+    if (apiKey != null) {
+      headers['X-Aerostack-Key'] = apiKey!;
+    }
+    if (token != null) {
+      headers['Authorization'] = 'Bearer $token';
+    }
+
+    final response = await _dio.get<Map<String, dynamic>>(
+      '/api/v1/public/realtime/history',
+      queryParameters: queryParams,
+      options: Options(headers: headers),
+    );
+
+    final body = response.data;
+    if (body == null) return [];
+
+    final messages = body['messages'] as List<dynamic>? ?? body['data'] as List<dynamic>? ?? [];
+    return messages
+        .map((m) => HistoryMessage.fromJson(m as Map<String, dynamic>))
+        .toList();
   }
 
   void _startHeartbeat() {
