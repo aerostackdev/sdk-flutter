@@ -33,40 +33,43 @@ class DatabaseFacade {
 }
 
 class SDK {
-  final AuthenticationApi auth;
-  final AIApi ai;
-  final StorageApi storage;
-  final DatabaseFacade database;
-  final RealtimeClient realtime;
+  late final AuthenticationApi auth;
+  late final AIApi ai;
+  late final StorageApi storage;
+  late final DatabaseFacade database;
+  late final RealtimeClient realtime;
 
-  final AerostackSdk _api;
+  late final AerostackSdk _api;
 
   SDK({
     String? apiKey,
     String? apiKeyAuth,
     String serverUrl = 'https://api.aerocall.ai/v1',
     int? maxReconnectAttempts,
-  }) : _api = AerostackSdk(
-          dio: Dio(BaseOptions(baseUrl: serverUrl)),
-          interceptors: [
-            InterceptorsWrapper(onRequest: (options, handler) {
-              final key = apiKey ?? apiKeyAuth;
-              if (key != null) {
-                options.headers['X-Aerostack-Key'] = key;
-              }
-              return handler.next(options);
-            })
-          ],
-        ),
-        auth = AerostackSdk(dio: Dio(BaseOptions(baseUrl: serverUrl))).getAuthenticationApi(),
-        ai = AerostackSdk(dio: Dio(BaseOptions(baseUrl: serverUrl))).getAIApi(),
-        storage = AerostackSdk(dio: Dio(BaseOptions(baseUrl: serverUrl))).getStorageApi(),
-        database = DatabaseFacade(AerostackSdk(dio: Dio(BaseOptions(baseUrl: serverUrl))).getDatabaseApi()),
-        realtime = RealtimeClient(
-          serverUrl: serverUrl,
-          apiKey: apiKey ?? apiKeyAuth,
-          maxReconnectAttempts: maxReconnectAttempts ?? 0,
-        );
+  }) {
+    final key = apiKey ?? apiKeyAuth;
+    // All service instances share the same Dio with the API key interceptor
+    _api = AerostackSdk(
+      dio: Dio(BaseOptions(baseUrl: serverUrl)),
+      interceptors: [
+        InterceptorsWrapper(onRequest: (options, handler) {
+          if (key != null) {
+            options.headers['X-Aerostack-Key'] = key;
+          }
+          return handler.next(options);
+        })
+      ],
+    );
+    auth = _api.getAuthenticationApi();
+    ai = _api.getAIApi();
+    storage = _api.getStorageApi();
+    database = DatabaseFacade(_api.getDatabaseApi());
+    realtime = RealtimeClient(
+      serverUrl: serverUrl,
+      apiKey: key,
+      maxReconnectAttempts: maxReconnectAttempts ?? 0,
+    );
+  }
 }
 
 /// @deprecated Use SDK instead
