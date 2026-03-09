@@ -63,7 +63,7 @@ try {
 
 ## Documentation for API Endpoints
 
-All URIs are relative to *https://api.aerocall.ai/v1*
+All URIs are relative to *https://api.aerostack.dev/v1*
 
 Class | Method | HTTP request | Description
 ------------ | ------------- | ------------- | -------------

@@ -19,7 +19,7 @@ import 'package:aerostack_sdk/src/api/services_api.dart';
 import 'package:aerostack_sdk/src/api/storage_api.dart';
 
 class AerostackSdk {
-  static const String basePath = r'https://api.aerocall.ai/v1';
+  static const String basePath = r'https://api.aerostack.dev/v1';
 
   final Dio dio;
   final Serializers serializers;

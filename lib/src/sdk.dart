@@ -44,7 +44,7 @@ class SDK {
   SDK({
     String? apiKey,
     String? apiKeyAuth,
-    String serverUrl = 'https://api.aerocall.ai/v1',
+    String serverUrl = 'https://api.aerostack.dev/v1',
     int? maxReconnectAttempts,
   }) {
     final key = apiKey ?? apiKeyAuth;
