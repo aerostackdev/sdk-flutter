@@ -27,13 +27,13 @@ class HistoryMessage {
   factory HistoryMessage.fromJson(Map<String, dynamic> json) {
     return HistoryMessage(
       id: json['id'] as String,
-      roomId: json['roomId'] as String,
-      userId: json['userId'] as String?,
+      roomId: json['room_id'] as String,
+      userId: json['user_id'] as String?,
       event: json['event'] as String,
       data: json['data'] is Map<String, dynamic>
           ? json['data'] as Map<String, dynamic>
           : jsonDecode(json['data'] as String) as Map<String, dynamic>,
-      createdAt: DateTime.parse(json['createdAt'] as String),
+      createdAt: DateTime.fromMillisecondsSinceEpoch(json['created_at'] as int),
     );
   }
 
@@ -85,6 +85,7 @@ class RealtimeSubscription<T> {
       'topic': topic,
     });
     _isSubscribed = false;
+    _client._removeSubscription(topic);
   }
 
   /// Publish a custom event to this subscription's topic.
@@ -217,15 +218,21 @@ class RealtimeClient {
 
     _setStatus(RealtimeStatus.connecting);
     
-    // Construct final URL with auth
+    // Construct final URL with auth — SECURITY: API key via subprotocol header, NOT URL query
     var finalUri = _wsUri;
     var query = Map<String, String>.from(finalUri.queryParameters);
-    if (apiKey != null) query['apiKey'] = apiKey!;
     if (token != null) query['token'] = token!;
     finalUri = finalUri.replace(queryParameters: query);
 
     try {
-      _channel = WebSocketChannel.connect(finalUri);
+      // Pass API key via Sec-WebSocket-Protocol header (never as URL query param)
+      final protocols = apiKey != null
+          ? ['aerostack-key.${apiKey!}', 'aerostack-v1']
+          : <String>[];
+      _channel = WebSocketChannel.connect(
+        finalUri,
+        protocols: protocols.isNotEmpty ? protocols : null,
+      );
       _isConnected = true;
       _reconnectAttempts = 0;
       _lastPong = DateTime.now();
@@ -346,6 +353,11 @@ class RealtimeClient {
       sub.close();
     }
     _sendQueue.clear();
+  }
+
+  /// @internal — Remove a subscription from the map (called on unsubscribe)
+  void _removeSubscription(String topic) {
+    _subscriptions.remove(topic);
   }
 
   /// @internal
